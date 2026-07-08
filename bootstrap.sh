@@ -190,6 +190,13 @@ git -C "$TARGET_DIR" add "hosts/$HOSTNAME/age-key.pub"
 git -C "$TARGET_DIR" commit -m "Add agenix key for $HOSTNAME"
 git -C "$TARGET_DIR" push origin "$BOOTSTRAP_BRANCH"
 
+# If credentials came from git-repo-creds.age, embed them in the remote URL
+# so nix-config git operations work after reboot without re-authenticating.
+if [ -n "${GIT_CRED_USERNAME:-}" ] && [ -n "${GIT_CRED_PASSWORD:-}" ]; then
+  git -C "$TARGET_DIR" remote set-url origin \
+    "https://${GIT_CRED_USERNAME}:${GIT_CRED_PASSWORD}@${REPO_URL#*://}"
+fi
+
 # The clone was made as root (from the installer session). Match whoever
 # already owns its parent directory (created for the real user during
 # nixos-install's activation) rather than requiring a username here.
@@ -200,4 +207,4 @@ echo "Bootstrap complete! Next steps:"
 echo "  > Merge branch '$BOOTSTRAP_BRANCH' into master on your git remote"
 echo "  > Run './reencrypt-secrets.sh' on an existing host, then push the new secrets"
 echo "  > Reboot (out of live boot) on this machine and log in"
-echo "  > Run 'nix-rebuild' on this machine"
+echo "  > Run 'nix-update' on this machine"
