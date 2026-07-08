@@ -5,6 +5,17 @@
 
 set -euo pipefail
 
+# Preflight checks — fail fast before touching anything
+if [ "$(id -u)" -ne 0 ]; then
+  echo "error: must be run as root" >&2
+  exit 1
+fi
+
+if ! mountpoint -q /mnt; then
+  echo "error: /mnt is not mounted — partition and mount the target disk first" >&2
+  exit 1
+fi
+
 # Refuses to run if machine is already bootstrapped
 if [ -e /etc/age/host.key ]; then
   echo "error: /etc/age/host.key already exists on this machine." >&2
