@@ -170,25 +170,25 @@ fi
 while IFS=: read -r username _ uid _ _ _ shell <&3; do
   shell_base="$(basename "$shell")"
   if [ "$uid" -ge 1000 ] && [ "$shell_base" != "nologin" ] && [ "$shell_base" != "false" ]; then
-    USER_HASH="$(grep "^$username:" /mnt/etc/shadow | cut -d: -f2)"
-    if [ "$USER_HASH" = "!" ] || [ "$USER_HASH" = "*" ] || [ -z "$USER_HASH" ]; then
-      while true; do
-        read -rsp "Password for $username (Enter to leave locked): " USER_PASS
-        echo
-        if [ -z "$USER_PASS" ]; then
-          echo "$username will remain locked."
-          break
-        fi
-        read -rsp "Confirm password for $username: " USER_PASS2
-        echo
-        if [ "$USER_PASS" = "$USER_PASS2" ]; then
-          printf '%s:%s\n' "$username" "$USER_PASS" | chpasswd --root /mnt
-          echo "Password set for $username."
-          break
-        fi
-        echo "Passwords do not match, try again."
-      done
-    fi
+    USER_HASH="$(grep "^$username:" /mnt/etc/shadow 2>/dev/null | cut -d: -f2 || true)"
+    # Real crypt hashes always start with '$'; anything else (!!, !, *, empty) means no password set
+    case "$USER_HASH" in '$'*) continue ;; esac
+    while true; do
+      read -rsp "Password for $username (Enter to leave locked): " USER_PASS
+      echo
+      if [ -z "$USER_PASS" ]; then
+        echo "$username will remain locked."
+        break
+      fi
+      read -rsp "Confirm password for $username: " USER_PASS2
+      echo
+      if [ "$USER_PASS" = "$USER_PASS2" ]; then
+        printf '%s:%s\n' "$username" "$USER_PASS" | chpasswd --root /mnt
+        echo "Password set for $username."
+        break
+      fi
+      echo "Passwords do not match, try again."
+    done
   fi
 done 3< /mnt/etc/passwd
 
