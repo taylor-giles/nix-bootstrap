@@ -112,7 +112,7 @@ pick_partition() {
 
   PS3=$'\n    Enter number: '
   local choice
-  select choice in "${labels[@]}"; do
+  COLUMNS=1 select choice in "${labels[@]}"; do
     if [ "$choice" = "skip / none" ]; then
       return 1
     fi
@@ -130,7 +130,7 @@ pick_fstype() {
 
   PS3=$'\n    Enter number: '
   local choice
-  select choice in \
+  COLUMNS=1 select choice in \
     "ext4   (stable, widely supported)" \
     "btrfs  (snapshots, compression, subvolumes)" \
     "xfs    (high performance, large files)"; do
