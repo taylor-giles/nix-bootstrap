@@ -195,9 +195,9 @@ git -C "$TARGET_DIR" push origin "$BOOTSTRAP_BRANCH"
 # nixos-install's activation) rather than requiring a username here.
 chown -R --reference="$(dirname "$TARGET_DIR")" "$TARGET_DIR"
 
+echo
 echo "Bootstrap complete! Next steps:"
 echo "  > Merge branch '$BOOTSTRAP_BRANCH' into master on your git remote"
-echo "  > Reboot (out of live boot) and log in"
-echo "  > -- Configure secrets --"
-echo "    > Run 'nix-reencrypt' on an existing host, then push the new secrets"
-echo "    > Run 'nix-rebuild' here"
+echo "  > Run './reencrypt-secrets.sh' on an existing host, then push the new secrets"
+echo "  > Reboot (out of live boot) on this machine and log in"
+echo "  > Run 'nix-rebuild' on this machine"
