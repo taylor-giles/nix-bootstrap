@@ -153,9 +153,8 @@ normal_users="$(nix eval --raw \
     (builtins.filter (n: users.${n}.isNormalUser or false)
       (builtins.attrNames users))')" \
   || { echo "error: nix eval failed (exit $?) — cannot determine user list" >&2; exit 1; }
-echo "DEBUG normal_users='$normal_users'" >&2
-
-while IFS= read -r username; do
+mapfile -t _users <<< $'root\n'"$normal_users"
+for username in "${_users[@]}"; do
   [ -z "$username" ] && continue
   USER_HASH="$(grep "^$username:" /mnt/etc/shadow 2>/dev/null | cut -d: -f2 || true)"
   # Real crypt hashes start with '$'; anything else means no password set
@@ -177,7 +176,7 @@ while IFS= read -r username; do
     fi
     echo "Passwords do not match, try again."
   done
-done <<< $'root\n'"$normal_users"
+done
 
 install -d -m 700 /mnt/etc/age
 rm -f /mnt/etc/age/host.key
