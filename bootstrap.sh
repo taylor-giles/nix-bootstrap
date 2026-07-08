@@ -145,52 +145,37 @@ fi
 # Do the install
 nixos-install --root /mnt --no-root-passwd --flake "$TARGET_DIR#$HOSTNAME"
 
-# Set root password if not already configured declaratively
-ROOT_HASH="$(grep '^root:' /mnt/etc/shadow | cut -d: -f2)"
-if [ "$ROOT_HASH" = "!" ] || [ "$ROOT_HASH" = "*" ] || [ -z "$ROOT_HASH" ]; then
+# Set passwords for root and normal users not already configured declaratively.
+# Ask Nix directly which users have isNormalUser = true — no passwd parsing needed.
+normal_users="$(nix eval --raw \
+  "$TARGET_DIR#nixosConfigurations.$HOSTNAME.config.users.users" \
+  --apply 'users: builtins.concatStringsSep "\n"
+    (builtins.filter (n: users.${n}.isNormalUser or false)
+      (builtins.attrNames users))')"
+
+while IFS= read -r username; do
+  [ -z "$username" ] && continue
+  USER_HASH="$(grep "^$username:" /mnt/etc/shadow 2>/dev/null | cut -d: -f2 || true)"
+  # Real crypt hashes start with '$'; anything else means no password set
+  case "$USER_HASH" in '$'*) continue ;; esac
+
   while true; do
-    read -rsp "Root password (Enter to leave locked): " ROOT_PASS
+    read -rsp "Password for $username (Enter to leave locked): " USER_PASS
     echo
-    if [ -z "$ROOT_PASS" ]; then
-      echo "Root will remain locked."
+    if [ -z "$USER_PASS" ]; then
+      echo "$username will remain locked."
       break
     fi
-    read -rsp "Confirm root password: " ROOT_PASS2
+    read -rsp "Confirm password for $username: " USER_PASS2
     echo
-    if [ "$ROOT_PASS" = "$ROOT_PASS2" ]; then
-      printf 'root:%s\n' "$ROOT_PASS" | chpasswd --root /mnt
+    if [ "$USER_PASS" = "$USER_PASS2" ]; then
+      printf '%s:%s\n' "$username" "$USER_PASS" | chpasswd --root /mnt
+      echo "Password set for $username."
       break
     fi
     echo "Passwords do not match, try again."
   done
-fi
-
-# Set passwords for all normal users not already configured declaratively.
-# Skips service accounts (nologin/false shell) to avoid prompting for nixbld etc.
-while IFS=: read -r username _ uid _ _ _ shell <&3; do
-  shell_base="$(basename "$shell")"
-  if [ "$uid" -ge 1000 ] && [ "$shell_base" != "nologin" ] && [ "$shell_base" != "false" ]; then
-    USER_HASH="$(grep "^$username:" /mnt/etc/shadow 2>/dev/null | cut -d: -f2 || true)"
-    # Real crypt hashes always start with '$'; anything else (!!, !, *, empty) means no password set
-    case "$USER_HASH" in '$'*) continue ;; esac
-    while true; do
-      read -rsp "Password for $username (Enter to leave locked): " USER_PASS
-      echo
-      if [ -z "$USER_PASS" ]; then
-        echo "$username will remain locked."
-        break
-      fi
-      read -rsp "Confirm password for $username: " USER_PASS2
-      echo
-      if [ "$USER_PASS" = "$USER_PASS2" ]; then
-        printf '%s:%s\n' "$username" "$USER_PASS" | chpasswd --root /mnt
-        echo "Password set for $username."
-        break
-      fi
-      echo "Passwords do not match, try again."
-    done
-  fi
-done 3< /mnt/etc/passwd
+done <<< $'root\n'"$normal_users"
 
 install -d -m 700 /mnt/etc/age
 rm -f /mnt/etc/age/host.key
