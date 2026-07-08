@@ -143,15 +143,38 @@ if [ -e "$HOST_KEY_FILE" ]; then
 fi
 
 # Do the install
-nixos-install --root /mnt --flake "$TARGET_DIR#$HOSTNAME"
+nixos-install --root /mnt --no-root-passwd --flake "$TARGET_DIR#$HOSTNAME"
 
-# Set passwords for all normal users on the installed system
-while IFS=: read -r username _ uid _; do
+# Set root password if not already configured declaratively
+ROOT_HASH="$(grep '^root:' /mnt/etc/shadow | cut -d: -f2)"
+if [ "$ROOT_HASH" = "!" ] || [ "$ROOT_HASH" = "*" ] || [ -z "$ROOT_HASH" ]; then
+  while true; do
+    read -rsp "Root password (Enter to leave locked): " ROOT_PASS
+    echo
+    if [ -z "$ROOT_PASS" ]; then
+      echo "Root will remain locked."
+      break
+    fi
+    read -rsp "Confirm root password: " ROOT_PASS2
+    echo
+    if [ "$ROOT_PASS" = "$ROOT_PASS2" ]; then
+      printf 'root:%s\n' "$ROOT_PASS" | chpasswd --root /mnt
+      break
+    fi
+    echo "Passwords do not match, try again."
+  done
+fi
+
+# Set passwords for all normal users not already configured declaratively
+while IFS=: read -r username _ uid _ <&3; do
   if [ "$uid" -ge 1000 ]; then
-    echo "Set password for $username:"
-    passwd --root /mnt "$username"
+    USER_HASH="$(grep "^$username:" /mnt/etc/shadow | cut -d: -f2)"
+    if [ "$USER_HASH" = "!" ] || [ "$USER_HASH" = "*" ] || [ -z "$USER_HASH" ]; then
+      echo "Set password for $username:"
+      passwd --root /mnt "$username"
+    fi
   fi
-done < /mnt/etc/passwd
+done 3< /mnt/etc/passwd
 
 install -d -m 700 /mnt/etc/age
 rm -f /mnt/etc/age/host.key
