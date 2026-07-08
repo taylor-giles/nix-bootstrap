@@ -165,13 +165,29 @@ if [ "$ROOT_HASH" = "!" ] || [ "$ROOT_HASH" = "*" ] || [ -z "$ROOT_HASH" ]; then
   done
 fi
 
-# Set passwords for all normal users not already configured declaratively
-while IFS=: read -r username _ uid _ <&3; do
-  if [ "$uid" -ge 1000 ]; then
+# Set passwords for all normal users not already configured declaratively.
+# Skips service accounts (nologin/false shell) to avoid prompting for nixbld etc.
+while IFS=: read -r username _ uid _ _ _ shell <&3; do
+  shell_base="$(basename "$shell")"
+  if [ "$uid" -ge 1000 ] && [ "$shell_base" != "nologin" ] && [ "$shell_base" != "false" ]; then
     USER_HASH="$(grep "^$username:" /mnt/etc/shadow | cut -d: -f2)"
     if [ "$USER_HASH" = "!" ] || [ "$USER_HASH" = "*" ] || [ -z "$USER_HASH" ]; then
-      echo "Set password for $username:"
-      passwd --root /mnt "$username"
+      while true; do
+        read -rsp "Password for $username (Enter to leave locked): " USER_PASS
+        echo
+        if [ -z "$USER_PASS" ]; then
+          echo "$username will remain locked."
+          break
+        fi
+        read -rsp "Confirm password for $username: " USER_PASS2
+        echo
+        if [ "$USER_PASS" = "$USER_PASS2" ]; then
+          printf '%s:%s\n' "$username" "$USER_PASS" | chpasswd --root /mnt
+          echo "Password set for $username."
+          break
+        fi
+        echo "Passwords do not match, try again."
+      done
     fi
   fi
 done 3< /mnt/etc/passwd
