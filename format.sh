@@ -76,22 +76,19 @@ pick_partition() {
   local prompt="$1"
   local allow_none="${2:-}"
 
-  # Collect partitions into an array
   local parts=()
   while IFS= read -r line; do
     parts+=("$line")
   done < <(get_parts)
 
-  if [ "${#parts[@]}" -eq 0 ]; then
+  [ "${#parts[@]}" -eq 0 ] && \
     die "no partitions found — partition the disk first (use fdisk, gdisk, or parted)"
-  fi
 
-  echo -e "${BOLD}  ${prompt}${RST}"
-  echo
+  echo -e "\n${BOLD}  ${prompt}${RST}\n" >&2
 
-  local i=1
+  local labels=()
   for line in "${parts[@]}"; do
-    local dev size fstype label mount
+    local dev size fstype label mount meta
     dev=$(awk '{print $1}' <<< "$line")
     size=$(awk '{print $3}' <<< "$line")
     fstype=$(awk '{print $4}' <<< "$line")
@@ -102,56 +99,47 @@ pick_partition() {
     [ "$label"  = "-" ] && label=""
     [ "$mount"  = "-" ] && mount=""
 
-    local meta=""
+    meta=""
     [ -n "$fstype" ] && meta+="${fstype}"
     [ -n "$label"  ] && meta+=" \"${label}\""
     [ -n "$mount"  ] && meta+=" → ${mount}"
-    [ -n "$meta"   ] && meta=" ${DIM}(${meta})${RST}"
+    [ -n "$meta"   ] && meta=" (${meta})"
 
-    printf "    ${YLW}[%2d]${RST}  %-22s ${GRN}%6s${RST}%b\n" \
-      "$i" "$dev" "$size" "$meta"
-    (( i++ ))
+    labels+=("$(printf "%-22s %6s%s" "$dev" "$size" "$meta")")
   done
 
-  if [ -n "$allow_none" ]; then
-    printf "    ${DIM}[ 0]  skip / none${RST}\n"
-  fi
+  [ -n "$allow_none" ] && labels+=("skip / none")
 
-  echo
+  PS3=$'\n    Enter number: '
   local choice
-  while true; do
-    read -rp "    Enter number: " choice
-    if [ -n "$allow_none" ] && [ "$choice" = "0" ]; then
-      echo ""   # signal: none
+  select choice in "${labels[@]}"; do
+    if [ "$choice" = "skip / none" ]; then
       return 1
     fi
-    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#parts[@]}" ]; then
-      awk '{print $1}' <<< "${parts[$((choice-1))]}"
+    if [ -n "$choice" ]; then
+      awk '{print $1}' <<< "${parts[$((REPLY-1))]}"
       return 0
     fi
-    warn "invalid selection — enter a number between 1 and ${#parts[@]}${allow_none:+ (or 0 to skip)}"
+    warn "invalid selection — enter a number between 1 and ${#labels[@]}" >&2
   done
 }
 
 # ── Root filesystem selection ─────────────────────────────────────────────────
 pick_fstype() {
-  echo -e "${BOLD}  Root filesystem type:${RST}"
-  echo
-  echo -e "    ${YLW}[ 1]${RST}  ext4   ${DIM}(stable, widely supported)${RST}"
-  echo -e "    ${YLW}[ 2]${RST}  btrfs  ${DIM}(snapshots, compression, subvolumes)${RST}"
-  echo -e "    ${YLW}[ 3]${RST}  xfs    ${DIM}(high performance, large files)${RST}"
-  echo
+  echo -e "\n${BOLD}  Root filesystem type:${RST}\n" >&2
 
+  PS3=$'\n    Enter number: '
   local choice
-  while true; do
-    read -rp "    Enter number [1]: " choice
-    choice="${choice:-1}"
-    case "$choice" in
+  select choice in \
+    "ext4   (stable, widely supported)" \
+    "btrfs  (snapshots, compression, subvolumes)" \
+    "xfs    (high performance, large files)"; do
+    case "$REPLY" in
       1) echo "ext4";  return ;;
       2) echo "btrfs"; return ;;
       3) echo "xfs";   return ;;
-      *) warn "invalid selection — enter 1, 2, or 3" ;;
     esac
+    warn "invalid selection — enter 1, 2, or 3" >&2
   done
 }
 
@@ -183,12 +171,8 @@ ROOT_FS="$(pick_fstype)"
 echo
 
 # --- Swap partition (optional) ---
-info "Select swap partition  ${DIM}(optional — enter 0 to skip)${RST}"
-SWAP_PART=""
-if pick_partition "Which partition should be swap?" "allow_none" > /tmp/_fmt_swap 2>&1; then
-  SWAP_PART="$(cat /tmp/_fmt_swap)"
-fi
-rm -f /tmp/_fmt_swap
+info "Select swap partition  ${DIM}(optional — select 'skip / none' to skip)${RST}"
+SWAP_PART="$(pick_partition "Which partition should be swap?" "allow_none")" || SWAP_PART=""
 echo
 
 # --- Sanity: ensure no duplicates ---
