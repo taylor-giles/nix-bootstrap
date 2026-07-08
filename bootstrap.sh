@@ -16,6 +16,11 @@ if ! mountpoint -q /mnt; then
   exit 1
 fi
 
+if ! mountpoint -q /mnt/boot; then
+  echo "error: /mnt/boot is not mounted — mount the boot partition first" >&2
+  exit 1
+fi
+
 # Refuses to run if machine is already bootstrapped
 if [ -e /etc/age/host.key ]; then
   echo "error: /etc/age/host.key already exists on this machine." >&2
