@@ -151,7 +151,9 @@ normal_users="$(nix eval --raw \
   "$TARGET_DIR#nixosConfigurations.$HOSTNAME.config.users.users" \
   --apply 'users: builtins.concatStringsSep "\n"
     (builtins.filter (n: users.${n}.isNormalUser or false)
-      (builtins.attrNames users))')"
+      (builtins.attrNames users))')" \
+  || { echo "error: nix eval failed (exit $?) — cannot determine user list" >&2; exit 1; }
+echo "DEBUG normal_users='$normal_users'" >&2
 
 while IFS= read -r username; do
   [ -z "$username" ] && continue
