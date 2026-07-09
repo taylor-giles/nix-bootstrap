@@ -178,6 +178,7 @@ for username in "${_users[@]}"; do
   done
 done
 
+# Generate new age keypair
 install -d -m 700 /mnt/etc/age
 rm -f /mnt/etc/age/host.key
 nix shell nixpkgs#age --command age-keygen -o /mnt/etc/age/host.key
