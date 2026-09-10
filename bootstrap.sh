@@ -190,6 +190,7 @@ printf '%s\n' "$AGE_PUBKEY" > "$HOST_KEY_FILE"
 git -C "$TARGET_DIR" add "hosts/$HOSTNAME/age-key.pub"
 git -C "$TARGET_DIR" commit -m "Add agenix key for $HOSTNAME"
 git -C "$TARGET_DIR" push origin "$BOOTSTRAP_BRANCH"
+git -C "$TARGET_DIR" checkout master
 
 # If credentials came from git-repo-creds.age, embed them in the remote URL
 # so nix-config git operations work after reboot without re-authenticating.
