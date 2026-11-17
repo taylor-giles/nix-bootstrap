@@ -119,9 +119,9 @@ fi
 mkdir -p "$(dirname "$TARGET_DIR")"
 mv "$TMPDIR/repo" "$TARGET_DIR"
 
-# Set git identity for all commits made by this script
-git -C "$TARGET_DIR" config user.name "NixOS Bootstrap"
-git -C "$TARGET_DIR" config user.email ""
+# Identity for commits made by this script. Passed per-command (-c) rather than
+# written with `git config`, so nothing is left in the repo's .git/config.
+BOOTSTRAP_GIT=(git -C "$TARGET_DIR" -c user.name="NixOS Bootstrap" -c user.email="")
 
 # All auto-commits go on a dedicated branch so master isn't pushed directly
 BOOTSTRAP_BRANCH="$HOSTNAME-bootstrap"
@@ -132,7 +132,7 @@ nixos-generate-config --root /mnt --show-hardware-config \
   > "$TARGET_DIR/hosts/$HOSTNAME/hardware-configuration.nix"
 
 git -C "$TARGET_DIR" add "hosts/$HOSTNAME/hardware-configuration.nix"
-git -C "$TARGET_DIR" commit -m "Add hardware-configuration.nix for $HOSTNAME"
+"${BOOTSTRAP_GIT[@]}" commit -m "Add hardware-configuration.nix for $HOSTNAME"
 
 # Check early for duplicate host key
 HOST_KEY_FILE="$TARGET_DIR/hosts/$HOSTNAME/age-key.pub"
@@ -188,7 +188,7 @@ AGE_PUBKEY="$(nix shell nixpkgs#age --command age-keygen -y /mnt/etc/age/host.ke
 # Persist new agenix key
 printf '%s\n' "$AGE_PUBKEY" > "$HOST_KEY_FILE"
 git -C "$TARGET_DIR" add "hosts/$HOSTNAME/age-key.pub"
-git -C "$TARGET_DIR" commit -m "Add agenix key for $HOSTNAME"
+"${BOOTSTRAP_GIT[@]}" commit -m "Add agenix key for $HOSTNAME"
 git -C "$TARGET_DIR" push origin "$BOOTSTRAP_BRANCH"
 git -C "$TARGET_DIR" checkout master
 
